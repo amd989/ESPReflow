@@ -22,6 +22,7 @@
 #include <ArduinoJson.h>
 #include "AsyncJson.h"
 #include "Config.h"
+#include "LCD.h"
 
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
@@ -30,6 +31,7 @@ ControllerBase * controller = NULL;
 ControllerBase * last_controller = NULL;
 AsyncWebSocketClient * _client = NULL;
 Config config("/config.json", "/profiles.json");
+Display display = Display();
 
 void textThem(const char * text) {
 	int tryId = 0;
@@ -64,6 +66,7 @@ void textThem(JsonObject &root)
 void send_reading(float reading, float target, float time, AsyncWebSocketClient * client, bool reset)
 {
 	S_printf("Sending readings...");
+
 	char str[255] = "";
 
 	StaticJsonBuffer<200> jsonBuffer;
@@ -79,11 +82,14 @@ void send_reading(float reading, float target, float time, AsyncWebSocketClient 
 	targets.add(target);
 	data["reset"] = reset;
 
+	// Send to display
+	display.displayTemperature(reading, target);
+	
 	textThem(root);
 }
 
 void setupController(ControllerBase * c)
-{
+{	
 	ControllerBase * tmp = controller;
 	controller = NULL;
 
@@ -103,6 +109,13 @@ void setupController(ControllerBase * c)
 		JsonObject &root = jsonBuffer.createObject();
 		root["heater"] = heater;
 		textThem(root);
+
+		if(heater)	{
+			display.groovelcd.setColor(RED);
+		}
+		else{
+			display.groovelcd.setColor(GREEN);
+		}		
 	});
 
 	// report readings
@@ -117,6 +130,9 @@ void setupController(ControllerBase * c)
 		JsonObject &root = jsonBuffer.createObject();
 		root["mode"] = controller->translate_mode(current);
 
+		// Send to display
+		display.displaySteps(false, controller->translate_mode(current));
+
 		textThem(root);
 	});
 	c->onStage([](const char * stage, float target){
@@ -125,6 +141,9 @@ void setupController(ControllerBase * c)
 		JsonObject &root = jsonBuffer.createObject();
 		root["stage"] = stage;
 		root["target"] = target;
+
+		// Send to display
+		display.displaySteps(true, stage);
 		textThem(root);
 	});
 
@@ -168,11 +187,12 @@ void send_data(AsyncWebSocketClient * client)
 void setup() {
 	Serial.begin(115200);
 
-	SPIFFS.begin();
+	SPIFFS.begin();	
 	config.load_config();
 	config.load_profiles();
 	config.setup_OTA();
-
+	display.setup_LCD();
+	
 	server.addHandler(&ws);
 	server.addHandler(&events);
 	server.serveStatic("/", SPIFFS, "/web").setDefaultFile("index.html");
@@ -256,15 +276,16 @@ void setup() {
 	});
 
 	server.begin();
-	setupController(new ReflowController(config));
 
-	S_printf("Server started..");
+	setupController(new ReflowController(config, display));
+
+	display.splash();
 }
 
 void loop() {
 	unsigned long now = millis();
 
-  config.OTA->loop(now);
+    config.OTA->loop(now);		
 
 	// since this is single core, we don't care about
 	// synchronization

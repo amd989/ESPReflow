@@ -15,15 +15,27 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  **/
 
-/**
-    Default configuration of the Weather Station
-		Copy this file to wificonfig.h and edit appropriately.
- */
- #ifndef MY_WIFICONFIG_H
- #define MY_WIFICONFIG_H
+#ifndef LCD_H
+#define LCD_H
 
-// Setup Wifi networks
-#define WIFI_SSID        "ssid"
-#define WIFI_PASSWORD    "passwd"
+#include <Wire.h>
+#include "rgb_lcd.h"
+
+class Display {
+
+public:
+	rgb_lcd groovelcd;
+    	
+public:
+	Display();
+	bool setup_LCD();
+	void printf(const char * format, ...);
+	void print(const String& value);
+	
+	void splash();
+
+	void displayTemperature(float temperature, float target);
+	void displaySteps(bool running, const String& name);
+};
 
 #endif

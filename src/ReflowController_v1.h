@@ -26,10 +26,10 @@ class ReflowController : public ControllerBase
 	unsigned long _stage_start;
 	double _start_temperature;
 	Config::stages_iterator current_stage;
-	Config::profiles_iterator current_profile;
+	Config::profiles_iterator current_profile;	
 
 public:
-	ReflowController(Config& cfg) : ControllerBase(cfg)
+	ReflowController(Config& cfg, Display& disp) : ControllerBase(cfg, disp)
 	{
 		_stage_start = 0;
 		current_profile = config.profiles.end();
@@ -39,9 +39,13 @@ public:
 		if (current_profile == config.profiles.end()) {
 			callMessage("ERROR: No Profile in reflow mode!");
 			mode(ERROR_OFF);
+			display.displaySteps(false, "Error");
 			return;
 		} else if (current_stage == current_profile->second.stages.end())
+		{
+			display.displaySteps(false, "Ended");
 			return;
+		}			
 
 		float direction = current_stage->target >= _start_temperature ? 1 : -1;
 		if (direction * (temperature() - current_stage->target) > 0 && _stage_start == 0) {
@@ -57,7 +61,7 @@ public:
 		handle_pid(now);
 	}
 
-	virtual const char * name() { return "Reflow Controller v1.0"; }
+	virtual const char * name() { return "Forge Controller v1.0"; }
 
 	virtual void handle_measure(unsigned long now) {
 		ControllerBase::handle_measure(now);
@@ -75,14 +79,14 @@ public:
 		//resetPID();
 	}
 	virtual void handle_target(float current_rate) {
-		if (current_profile != config.profiles.end()										// profile set
-				&& current_stage != current_profile->second.stages.end()		// stage set
-				&& current_stage->rate > 0																	// rate set
+		if (current_profile != config.profiles.end()									// profile set
+				&& current_stage != current_profile->second.stages.end()				// stage set
+				&& current_stage->rate > 0												// rate set
 				&& abs(current_rate) <= current_stage->rate) {							// current average rate is within limits
 
 			float direction = target() <= current_stage->target ? 1 : -1;
 
-			if (direction * (temperature() - current_stage->target) < 0						// haven't reached stage target yet
+			if (direction * (temperature() - current_stage->target) < 0					// haven't reached stage target yet
 					&& (direction * (temperature() - target()) > 0 || abs(current_rate) < current_stage->rate)) {										// reached interpolated target
 				interpolate_target(direction);
 			} /* else if (current_profile != config.profiles.end()
@@ -102,7 +106,8 @@ public:
 		if (m != REFLOW) {
 			return ControllerBase::mode(m);
 		}
-
+		
+		// Reflow
 		if (current_profile != config.profiles.end()) {
 			stage(current_profile->second.stages.begin());
 			return ControllerBase::mode(m);
